@@ -273,5 +273,84 @@ project(HELLO)
 * 执行这个之后会引入两个变量：HELLO_SOURCE_DIR 和 HELLO_BINARY_DIR，注意这两个变量名的前缀就是工程名称，HELLO_SOURCE_DIR 变量指的是 HELLO 工程源码目录、HELLO_BINARY_DIR 变量指的是 HELLO 工程源码的输出文件目录。
 * 如果不加入 project(HELLO)命令，这两个变量是不存在的；工程源码目录指的是顶层源码所在目录，cmake 定义了两个等价的变量 PROJECT_SOURCE_DIR 和 PROJECT_BINARY_DIR，通常在 CMakeLists.txt源码中都会使用这两个等价的变量。通常只需要在顶层 CMakeLists.txt 源码中调用 project 即可！
 
+__set__
+* set 命令用于设置变量，命令定义如下所示：
+```
+set(<variable> <value>... [PARENT_SCOPE])
+```
+* 设置变量的值，可选参数 PARENT_SCOPE 影响变量的作用域。譬如 CMakeLists.txt 源码内容如下所示：
+```
+# 顶层 CMakeLists.txt
+cmake_minimum_required("VERSION" "3.5")
+project("HELLO")
+# set 命令
+set(VAR1 Hello) #设置变量 VAR1=Hello
+set(VAR2 World) #设置变量 VAR2=World
+```
+__字符串列表__
+* 
+通过 set 命令实现字符串列表，如下所示：
+```
+# 字符串列表
+set(SRC_LIST 1.c 2.c 3.c 4.c 5.c)
+```
+* 此时 SRC_LIST 就是一个列表，它包含了 5 个元素（1.c、2.c、3.c、4.c、5.c），列表的各个元素使用分号“;”分隔，如下：
+```
+SRC_LIST = 1.c;2.c;3.c;4.c;5.c #列表
+```
+__target_include_directories 和 target_link_libraries__
+* target_include_directories 命令为指定目标设置头文件搜索路径，而 target_link_libraries 命令为指定目标设置链接库文件，这听起来跟 include_directories 和 link_libraries 命令有着相同的作用，确实如此，它们的功能的确相同，但是在一些细节方面却有不同。target_include_directories 和 target_link_libraries 命令定义如下所示：
+```
+target_include_directories(<target> [SYSTEM] [BEFORE]
+ <INTERFACE|PUBLIC|PRIVATE> [items1...]
+ [<INTERFACE|PUBLIC|PRIVATE> [items2...] ...])
 
-
+target_link_libraries(<target>
+ <PRIVATE|PUBLIC|INTERFACE> <item>...
+ [<PRIVATE|PUBLIC|INTERFACE> <item>...]...)
+ ```
+* 这俩命令都有一个相同的参数<target>目标，这个目标指的就是譬如 add_executable、add_library 命令所创建的目标。首先对于target_include_directories 命令来说 ，SYSTEM 、BEFORE 这两个选项与include_directories 命令中 SYSTEM、BEFORE 选项的意义相同，这里不再多说！
+* 我们重点关注的是 INTERFACE|PUBLIC|PRIVATE 这三个选项有何不同？通过一个示例向大家说明，譬如工程目录结构如下所示：
+```
+├── build //build 目录
+├── CMakeLists.txt
+├── hello_world //生成 libhello_world.so,调用 libhello.so 和 libworld.so
+│ ├── CMakeLists.txt
+│ ├── hello //生成 libhello.so
+│ │ ├── CMakeLists.txt
+│ │ ├── hello.c
+│ │ └── hello.h //libhello.so 对外头文件
+│ ├── hello_world.c
+│ ├── hello_world.h //libhello_world.so 对外头文件
+│ └── world //生成 libworld.so
+│ ├── CMakeLists.txt
+│ ├── world.c
+│ └── world.h //libworld.so 对外头文件
+└── main.c
+ ```
+* 调用关系
+```
+ ├────libhello.so
+可执行文件────libhello_world.so
+ ├────libworld.so
+```
+* 根据以上工程，我们对 INTERFACE、PUBLIC、PRIVATE 三个关键字进行说明：
+__PRIVATE__：私有的。main.c 程序调用了 libhello_world.so，生成 libhello_world.so 时，只在 hello_world.c中包含了 hello.h，libhello_world.so 对外的头文件——hello_world.h 中不包含 hello.h。而且 main.c 不会调用hello.c 中的函数，或者说 main.c 不知道 hello.c 的存在，它只知道 libhello_world.so 的存在；那么在hello_world/CMakeLists.txt 中应该写入：
+```
+target_link_libraries(hello_world PRIVATE hello)
+target_include_directories(hello_world PRIVATE hello)
+```
+* __INTERFACE__：接口。生成 libhello_world.so 时，只在 libhello_world.so 对外的头文件——hello_world.h中包含了 hello.h，hello_world.c 中不包含 hello.h，即 libhello_world.so 不使用 libhello.so 提供的功能，但是main.c 需要使用 libhello.so 中的功能。那么在 hello_world/CMakeLists.txt 中应该写入：
+```
+target_link_libraries(hello-world INTERFACE hello)
+target_include_directories(hello-world INTERFACE hello)
+```
+* __PUBLIC__：公开的。PUBLIC = PRIVATE + INTERFACE。生成 libhello_world.so 时，在 hello_world.c 和hello_world.h 中都包含了 hello.h。并且 main.c 中也需要使用 libhello.so 提供的功能。那么在hello_world/CMakeLists.txt 中应该写入：
+```
+target_link_libraries(hello-world PUBLIC hello)
+target_include_directories(hello-world PUBLIC hello)
+```
+* 对于 target_include_directories 来说，这些关键字用于指示何时需要传递给目标的包含目录列表，指定了包含目录列表的使用范围（scope）：
+⚫ 当使用 PRIVATE 关键字修饰时，意味着包含目录列表仅用于当前目标；
+⚫ 当使用 INTERFACE 关键字修饰时，意味着包含目录列表不用于当前目标、只能用于依赖该目标的其它目标，也就是说 cmake 会将包含目录列表传递给当前目标的依赖目标；
+⚫ 当使用 PUBLIC 关键字修饰时，这就是以上两个的集合，包含目录列表既用于当前目标、也会传递给当前目标的依赖目标。对于 target_link_libraries 亦是如此，只不过包含目录列表换成了链接库列表。譬如：target_link_libraries(hello_world INTERFACE hello)：表示目标 hello_world 不需要链接 hello 库，但是对于 hello_world 目标的依赖目标（依赖于 hello_world 的目标）它们需要链接 hello 库。
