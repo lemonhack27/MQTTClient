@@ -13,7 +13,7 @@ function(compile_module obj)
                     COMMAND echo "compiling module ${obj}.ko..."
                     )
 # 设置依赖，相当于Makefile中的 $(MODULE_NAME)-objs += demo_main.o
-set(depend_objlist "demo_main.o")
+set(depend_objlist "dtsled.o")
 # 设置编译命令
 add_custom_command(TARGET ${TARGET_NAME}
 		     POST_BUILD

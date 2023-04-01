@@ -22,5 +22,6 @@ make dtbs
 ```
 source /opt/st/stm32mp1/3.1-openstlinux-5.4-dunfell-mp1-20-06-24/environment-setup-cortexa7t2hf-neon-vfpv4-ostl-linux-gnueabi
 ```
+* 在开发板使用depmod总是提示error，打开太多文件，这时候进入/lib/modules/${uname -a}看看模块是否存在，若不存在，需要将对应版本的模块解压到/lib/modules下面
 
 
