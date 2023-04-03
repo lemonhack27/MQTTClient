@@ -1,6 +1,7 @@
 # Linux 阻塞和非阻塞 IO 实验
 * 阻塞和非阻塞 IO 是 Linux 驱动开发里面很常见的两种设备访问模式，在编写驱动的时候一定要考虑到阻塞和非阻塞。
-## 阻塞和非阻塞 IO
+;## 
+
 ### 阻塞和非阻塞简介
 * 当应用程序对设备驱动进行操作的时候，如果不能获取到设备资源，那么阻塞式 IO 就会将应用程序对应的线程挂起，直到设备资源可以获取为止。对于非阻塞 IO，应用程序对应的线程不会挂起，它要么一直轮询等待，直到设备资源可以使用，要么就直接放弃。阻塞式 IO 如图 32.1.1.1 所示：
 ![阻塞IO访问示意图](photos\阻塞IO访问示意图.png)
@@ -245,8 +246,8 @@ EPOLL_CTL_DEL 从 epfd 中删除 fd 描述符。
 __event__：要监视的事件类型，为 epoll_event 结构体类型指针，epoll_event 结构体类型如下所示：
 ```
 struct epoll_event {
-uint32_t events; /* epoll 事件 */
-epoll_data_t data; /* 用户数据 */
+    uint32_t events; /* epoll 事件 */
+    epoll_data_t data; /* 用户数据 */
 };
 ```
 * 结构体 epoll_event 的 events 成员变量表示要监视的事件，可选的事件如下所示：
@@ -259,24 +260,44 @@ EPOLLHUP 指定的文件描述符挂起。
 EPOLLET 设置 epoll 为边沿触发，默认触发模式为水平触发。
 EPOLLONESHOT 一次性的监视，当监视完成以后还需要再次监视某个 fd，那么就需要将fd 重新添加到 epoll 里面。
 ```
-上面这些事件可以进行“或”操作，也就是说可以设置监视多个事件。
-返回值：0，成功；-1，失败，并且设置 errno 的值为相应的错误码。
-一切都设置好以后应用程序就可以通过 epoll_wait 函数来等待事件的发生，类似 select 函
-数。epoll_wait 函数原型如下所示：
+* 上面这些事件可以进行“或”操作，也就是说可以设置监视多个事件。
+__返回值__：0，成功；-1，失败，并且设置 errno 的值为相应的错误码。
+* 一切都设置好以后应用程序就可以通过 epoll_wait 函数来等待事件的发生，类似 select 函数。epoll_wait 函数原型如下所示：
+```
 int epoll_wait(int epfd, 
-struct epoll_event *events,
-int maxevents, 
-int timeout)
-函数参数和返回值含义如下：
-epfd：要等待的 epoll。
-events：指向 epoll_event 结构体的数组，当有事件发生的时候 Linux 内核会填写 events，调
-用者可以根据 events 判断发生了哪些事件。
-maxevents：events 数组大小，必须大于 0。
-timeout：超时时间，单位为 ms。
-返回值：0，超时；-1，错误；其他值，准备就绪的文件描述符数量。
-epoll 更多的是用在大规模的并发服务器上，因为在这种场合下 select 和 poll 并不适合。当
-设计到的文件描述符(fd)比较少的时候就适合用 selcet 和 poll，本章我们就使用 sellect 和 poll 这
-两个函数。
+                struct epoll_event *events,
+                int maxevents, 
+                int timeout)
+```
+* 函数参数和返回值含义如下：
+__epfd__：要等待的 epoll。
+__events__：指向 epoll_event 结构体的数组，当有事件发生的时候 Linux 内核会填写 events，调用者可以根据 events 判断发生了哪些事件。
+__maxevents__：events 数组大小，必须大于 0。
+__timeout__：超时时间，单位为 ms。
+__返回值__：0，超时；-1，错误；其他值，准备就绪的文件描述符数量。
+* epoll 更多的是用在大规模的并发服务器上，因为在这种场合下 select 和 poll 并不适合。当设计到的文件描述符(fd)比较少的时候就适合用 selcet 和 poll，本章我们就使用 sellect 和 poll 这两个函数。
 
-
+### Linux 驱动下的 poll 操作函数
+* 当应用程序调用 select 或 poll 函数来对驱动程序进行非阻塞访问的时候，驱动程序file_operations 操作集中的 poll 函数就会执行。所以驱动程序的编写者需要提供对应的 poll 函数，poll 函数原型如下所示：
+```
+unsigned int (*poll) (struct file *filp, struct poll_table_struct *wait)
+```
+* 函数参数和返回值含义如下：
+__filp__：要打开的设备文件(文件描述符)。
+__wait__：结构体 poll_table_struct 类型指针，由应用程序传递进来的。一般将此参数传递给poll_wait 函数。
+__返回值__:向应用程序返回设备或者资源状态，可以返回的资源状态如下：
+```
+POLLIN 有数据可以读取。
+POLLPRI 有紧急的数据需要读取。
+POLLOUT 可以写数据。
+POLLERR 指定的文件描述符发生错误。
+POLLHUP 指定的文件描述符挂起。
+POLLNVAL 无效的请求。
+POLLRDNORM 等同于 POLLIN，普通数据可读
+```
+* 我们需要在驱动程序的 poll 函数中调用 poll_wait 函数，poll_wait 函数不会引起阻塞，只是将应用程序添加到 poll_table 中，poll_wait 函数原型如下：
+```
+void poll_wait(struct file * filp, wait_queue_head_t * wait_address, poll_table *p)
+```
+* 参数 wait_address 是要添加到 poll_table 中的等待队列头，参数 p 就是 poll_table，就是file_operations 中 poll 函数的 wait 参数。
 
