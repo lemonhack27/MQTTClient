@@ -1,7 +1,7 @@
 KERNELDIR := /home/lemonhack/Study/linuxstudy/kernel/linux-5.4.31
 CURRENT_PATH := $(shell pwd)
 
-obj-m := dtsled.o
+obj-m := dtsplatform_led.o
 
 build: kernel_modules
 
